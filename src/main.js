@@ -1,17 +1,14 @@
 import childProcess from "node:child_process";
-import fs from "node:fs";
 import path from "node:path";
-import timersPromises from "node:timers/promises";
 
 import _ from "lodash";
 import { config as dotenv } from "dotenv-flow";
-import { CookieJar } from "tough-cookie";
-import { JSDOM } from "jsdom";
-import m3u8Parser from "m3u8-parser";
-import makeFetchCookie from "fetch-cookie";
-import urlJoin from "url-join";
+import fs from "fs-extra";
 
+import { parseManifestStr, LocalMediaManifest, LocalChannelManifest } from "./LocalManifest.js";
 import HttpServer from "./HttpServer.js";
+import LordFilmMediaProvider from "./LordFilmMediaProvider.js";
+import RequestsManager from "./RequestsManager.js";
 
 import applicationInfo from "../package.json" with { type: "json" };
 
@@ -26,182 +23,20 @@ dotenv({
 
 const USER_DATA_DIRECTORY = path.join(CWD, process.env.USER_DATA || "userData");
 
-const USER_AGENT = process.env.USER_AGENT;
-if (!USER_AGENT) console.warn("Empty USER_AGENT");
+// async function joinAudioAndVideo(videoFilePath, audioFilePath, outputMediaFilePath) {
+// 	const cmd = `ffmpeg -hide_banner -y -i "${videoFilePath}" -i "${audioFilePath}" -c:v copy -c:a copy "${outputMediaFilePath}"`;
 
-const cookieJar = new CookieJar();
-const fetchCookie = makeFetchCookie(fetch, cookieJar);
+// 	const ffmpegProcess = childProcess.exec(cmd);
 
-function request(url, options) {
-	return fetchCookie(
-		url,
-		_.merge(
-			{},
-			options,
-			{
-				headers: {
-					"user-agent": USER_AGENT
-				}
-			}
-		)
-	);
-}
+// 	ffmpegProcess.stderr.on("data", data => {
+// 		console.log(data.toString());
+// 	});
 
-const DOMAIN = process.env.DOMAIN;
-const baseUrl = new URL(DOMAIN);
-
-async function checkBaseUrl() {
-	try {
-		const response = await request(baseUrl.href, {
-			signal: AbortSignal.timeout(3000)
-		});
-
-		if (response.status !== 200) throw new Error(`Статус ответа ${response.status}`);
-
-		return true;
-	} catch (error) {
-		console.error(`${baseUrl.href} не работает, проверьте настройки (${[error.message, error.cause && error.cause.code, error.cause && error.cause.message].filter(Boolean).join(", ")})`);
-
-		return false;
-	}
-}
-
-async function search(queryStr) {
-	const searchUrl = new URL(baseUrl);
-	searchUrl.pathname = "search-result";
-
-	const searchResponse = await request(searchUrl.href, {
-		method: "POST",
-		body: new URLSearchParams({
-			do: "search",
-			subaction: "search",
-			story: queryStr.toLowerCase()
-		})
-	});
-
-	const searchResponseHtml = await searchResponse.text();
-
-	let document = (new JSDOM(searchResponseHtml)).window.document;
-
-	const result = [];
-
-	const searchItemElements = document.querySelectorAll(".th-item");
-	for (const searchItemElement of searchItemElements) {
-		const item = {
-			title: searchItemElement.querySelector(".th-title").textContent,
-			url: searchItemElement.querySelector("a[href]").getAttribute("href")
-		};
-
-		result.push(item);
-	}
-
-	return result;
-}
-
-async function getMediaInfo(url) {
-	const mediaPageResponse = await request(url);
-	const mediaPageResponseHtml = await mediaPageResponse.text();
-
-	let document = (new JSDOM(mediaPageResponseHtml)).window.document;
-
-	const iframeElement = document.querySelector(".tabs-b.video-box iframe");
-
-	let mediaInfoPageUrl = iframeElement.getAttribute("src");
-	if (mediaInfoPageUrl.startsWith("//")) mediaInfoPageUrl = "https:" + mediaInfoPageUrl;
-
-	const mediaInfoPageResponse = await request(mediaInfoPageUrl);
-	const mediaInfoPageResponseHtml = await mediaInfoPageResponse.text();
-
-	document = (new JSDOM(mediaInfoPageResponseHtml)).window.document;
-
-	const scriptElement = document.querySelector("script[data-name=mk]");
-	const scriptStr = scriptElement.textContent;
-
-	const mediaInfo = eval("(" + scriptStr.substring(scriptStr.indexOf("({") + 1, scriptStr.lastIndexOf("})") + 1) + ")");
-
-	return mediaInfo;
-}
-
-function parseManifestStr(manifestStr) {
-	const parser = new m3u8Parser.Parser();
-	parser.push(manifestStr);
-	parser.end();
-
-	const manifest = parser.manifest;
-
-	return manifest;
-}
-
-const SEGMENT_DOWNLOADING_COOLDOWN_IN_MILLISECONDS = 500;
-
-async function downloadAllMediaSegments(filePath, manifestUrl, manifest) {
-	const segmentBuffers = [];
-
-	manifestUrl = new URL(manifestUrl);
-
-	for (let segmentIndex = 0; segmentIndex < manifest.segments.length; segmentIndex++) {
-		const segment = manifest.segments[segmentIndex];
-
-		const url = new URL(urlJoin(manifestUrl.origin, ...manifestUrl.pathname.split("/").slice(0, -1), segment.uri));
-
-		const segmentResponse = await request(url.href);
-		const segmentBuffer = Buffer.from(await segmentResponse.arrayBuffer());
-
-		// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "segments", `${(segmentIndex + 1).toString().padStart(5, "0")}.ts`), segmentBuffer);
-
-		segmentBuffers.push(segmentBuffer);
-
-		console.log(`Downloaded ${segmentIndex + 1}/${manifest.segments.length} segments`);
-
-		if (segmentIndex < manifest.segments.length - 1) await timersPromises.setTimeout(SEGMENT_DOWNLOADING_COOLDOWN_IN_MILLISECONDS);
-	}
-
-	fs.writeFileSync(filePath, Buffer.concat(segmentBuffers));
-}
-
-async function joinAudioAndVideo(videoFilePath, audioFilePath, outputMediaFilePath) {
-	const cmd = `ffmpeg -hide_banner -y -i "${videoFilePath}" -i "${audioFilePath}" -c:v copy -c:a copy "${outputMediaFilePath}"`;
-
-	const ffmpegProcess = childProcess.exec(cmd);
-
-	ffmpegProcess.stderr.on("data", data => {
-		console.log(data.toString());
-	});
-
-	await new Promise((resolve, reject) => {
-		ffmpegProcess.once("exit", code => code === 0 ? resolve() : reject(new Error(code.toString())));
-		ffmpegProcess.once("error", reject);
-	});
-}
-
-class LocalManifest {
-	constructor(remoteManifest) {
-		this.remoteManifest = remoteManifest;
-	}
-
-	compile() {
-		const lines = [
-			"#EXTM3U",
-			"#EXT-X-VERSION:3",
-			"#EXT-X-PLAYLIST-TYPE:VOD",
-			"#EXT-X-MEDIA-SEQUENCE:1",
-			`#EXT-X-TARGETDURATION:${Math.ceil(_.max(this.remoteManifest.segments.map(segment => segment.duration)))}`
-		];
-
-		for (let segmentIndex = 0; segmentIndex < this.remoteManifest.segments.length; segmentIndex++) {
-			const segment = this.remoteManifest.segments[segmentIndex];
-
-			lines.push(
-				`#EXTINF:${segment.duration},`,
-				`s/${(segmentIndex + 1).toString().padStart(5, "0")}.ts`
-			);
-		}
-
-		lines.push("#EXT-X-ENDLIST");
-
-		return lines.join("\n") + "\n";
-	}
-}
+// 	await new Promise((resolve, reject) => {
+// 		ffmpegProcess.once("exit", code => code === 0 ? resolve() : reject(new Error(code.toString())));
+// 		ffmpegProcess.once("error", reject);
+// 	});
+// }
 
 class Application {
 	constructor() {
@@ -217,8 +52,6 @@ class Application {
 
 		this.components = [];
 
-		this.addComponent(this.httpServer = new HttpServer());
-
 		this.printLogo();
 	}
 
@@ -227,7 +60,6 @@ class Application {
 
 		console.log(logo);
 	}
-
 
 	addComponent(component) {
 		component.application = this;
@@ -240,23 +72,27 @@ class Application {
 	}
 
 	async initialize() {
-		// this.createUserDataDirectory();
+		this.createUserDataDirectory();
 		// this.createConfig();
 
 		// const { default: FFMpegManager } = await import("./components/FFMpegManager.js");
 
-		// this.addComponent(this.ffmpegManager = new FFMpegManager());
+		this.addComponent(this.httpServer = new HttpServer());
+		this.addComponent(this.requestsManager = new RequestsManager());
+		this.addComponent(this.mediaProvider = new LordFilmMediaProvider());
 
-		for (let i = 0; i < this.components.length; i++) await this.components[i].initialize && this.components[i].initialize();
+		for (let i = 0; i < this.components.length; i++) if (this.components[i].initialize) await this.components[i].initialize();
 	}
 
-	// createUserDataDirectory() {
-	// 	this.userDataDirectory = this.isDevelopment
-	// 		? path.resolve(import.meta.dirname, "userData")
-	// 		: path.resolve(process.env.APPDATA, filenamify(this.info.name));
+	createUserDataDirectory() {
+		// this.userDataDirectory = this.isDevelopment
+		// 	? path.resolve(import.meta.dirname, "userData")
+		// 	: path.resolve(process.env.APPDATA, filenamify(this.info.name));
 
-	// 	fs.ensureDirSync(this.userDataDirectory);
-	// }
+		this.userDataDirectory = USER_DATA_DIRECTORY;
+
+		fs.ensureDirSync(this.userDataDirectory);
+	}
 
 	// createConfig() {
 	// 	this.configPath = path.resolve(this.userDataDirectory, "config.yaml");
@@ -278,70 +114,75 @@ class Application {
 	// }
 
 	async run() {
-		for (let i = 0; i < this.components.length; i++) await this.components[i].run && this.components[i].run();
+		for (let i = 0; i < this.components.length; i++) if (this.components[i].run) await this.components[i].run();
 
 		if (isDevelopment) console.warn("[isDevelopment]");
 		console.log(`[userDataDirectory]: ${this.userDataDirectory}`);
 		// console.log(`[config]: ${this.configPath}`);
 		// console.log(`[config.outputDirectory]: ${this.config.outputDirectory}`);
 
-		// if (!(await checkBaseUrl())) return;
+		// const query = "Мартынко";
+		const query = "горько";
 
-		// const searchResult = await search("мартынко");
-		// if (searchResult.length === 0) return;
+		console.log(`Searching for media "${query}"`);
 
-		// const mediaItem = _.first(searchResult);
+		const searchResult = await this.mediaProvider.search(query);
+		if (searchResult.length === 0) {
+			console.log(`No media found for "${query}"`);
+		} else {
+			console.log(`Found ${searchResult.length} media items for "${query}"`);
 
-		// const mediaInfo = await getMediaInfo(mediaItem.url);
-		// // console.log(JSON.stringify(mediaInfo, null, "\t"));
+			const mediaItem = _.first(searchResult);
 
-		// const mediaManifestResponse = await request(mediaInfo.source.hls);
-		// const mediaManifestStr = await mediaManifestResponse.text();
-		// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "mediaManifest.txt"), mediaManifestStr);
-		// const mediaManifest = parseManifestStr(mediaManifestStr);
-		// // const mediaManifest = parseManifestStr(fs.readFileSync(path.join(USER_DATA_DIRECTORY, "mediaManifest.txt")).toString());
+			const mediaInfo = await this.mediaProvider.getMediaInfo(mediaItem);
+			// console.log(JSON.stringify(mediaInfo, null, "\t"));
 
-		// const videoManifestUrl = mediaManifest.playlists[0].uri;
-		// const videoManifestResponse = await request(videoManifestUrl);
-		// const videoManifestStr = await videoManifestResponse.text();
-		// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "videoManifest.txt"), videoManifestStr);
-		// const videoManifest = parseManifestStr(videoManifestStr);
-		const videoManifest = parseManifestStr(fs.readFileSync(path.join(USER_DATA_DIRECTORY, "videoManifest.txt")).toString());
-		const localVideoManifest = new LocalManifest(videoManifest);
-		fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "localVideoManifest.txt"), localVideoManifest.compile());
+			const mediaManifestUrl = mediaInfo.source.hls;
+			const mediaManifestResponse = await this.requestsManager.request(mediaManifestUrl);
+			const mediaManifestStr = await mediaManifestResponse.text();
+			// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "mediaManifest.txt"), mediaManifestStr);
+			const mediaManifest = parseManifestStr(mediaManifestStr);
+			// const mediaManifest = parseManifestStr(fs.readFileSync(path.join(USER_DATA_DIRECTORY, "mediaManifest.txt")).toString());
+			const localMediaManifest = new LocalMediaManifest(mediaManifest, mediaManifestUrl);
+			localMediaManifest.compile();
 
-		// const videoFilePath = path.join(USER_DATA_DIRECTORY, "video.mp4");
-		// await downloadAllMediaSegments(videoFilePath, videoManifestUrl, videoManifest);
+			const videoManifestUrl = mediaManifest.playlists[0].uri;
+			const videoManifestResponse = await this.requestsManager.request(videoManifestUrl);
+			const videoManifestStr = await videoManifestResponse.text();
+			// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "videoManifest.txt"), videoManifestStr);
+			const videoManifest = parseManifestStr(videoManifestStr);
+			// const videoManifest = parseManifestStr(fs.readFileSync(path.join(USER_DATA_DIRECTORY, "videoManifest.txt")).toString());
+			const localVideoManifest = new LocalChannelManifest(videoManifest, "video", videoManifestUrl);
+			localVideoManifest.compile();
+			// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "localVideoManifest.txt"), localVideoManifest.compile());
 
-		// const audioManifestUrl = mediaManifest.mediaGroups.AUDIO["audio0"].default.uri;
-		// const audioManifestResponse = await request(audioManifestUrl);
-		// const audioManifestStr = await audioManifestResponse.text();
-		// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "audioManifest.txt"), audioManifestStr);
-		// const audioManifest = parseManifestStr(audioManifestStr);
-		// const audioManifest = parseManifestStr(fs.readFileSync(path.join(USER_DATA_DIRECTORY, "audioManifest.txt")).toString());
+			// const videoFilePath = path.join(USER_DATA_DIRECTORY, "video.mp4");
+			// await downloadAllMediaSegments(videoFilePath, videoManifestUrl, videoManifest);
 
-		// const audioFilePath = path.join(USER_DATA_DIRECTORY, "audio.mp4");
-		// await downloadAllMediaSegments(audioFilePath, audioManifestUrl, audioManifest);
+			const audioManifestUrl = mediaManifest.mediaGroups.AUDIO["audio0"].default.uri;
+			const audioManifestResponse = await this.requestsManager.request(audioManifestUrl);
+			const audioManifestStr = await audioManifestResponse.text();
+			// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "audioManifest.txt"), audioManifestStr);
+			const audioManifest = parseManifestStr(audioManifestStr);
+			// const audioManifest = parseManifestStr(fs.readFileSync(path.join(USER_DATA_DIRECTORY, "audioManifest.txt")).toString());
+			const localAudioManifest = new LocalChannelManifest(audioManifest, "audio", audioManifestUrl);
+			localAudioManifest.compile();
+			// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "localAudioManifest.txt"), localAudioManifest.compile());
 
-		// const mediaFilePath = path.join(USER_DATA_DIRECTORY, "out.mp4");
-		// await joinAudioAndVideo(videoFilePath, audioFilePath, mediaFilePath);
+			// const audioFilePath = path.join(USER_DATA_DIRECTORY, "audio.mp4");
+			// await downloadAllMediaSegments(audioFilePath, audioManifestUrl, audioManifest);
 
+			// const mediaFilePath = path.join(USER_DATA_DIRECTORY, "out.mp4");
+			// await joinAudioAndVideo(videoFilePath, audioFilePath, mediaFilePath);
 
-		setTimeout(() => {
-			const videoSegmentInfos = videoManifest.segments.map((segment, index) => path.join(USER_DATA_DIRECTORY, "segments", `${(index + 1).toString().padStart(5, "0")}.ts`));
-
-			this.httpServer.registerMedia(
-				Buffer.from(localVideoManifest.compile()),
-				null,
-				videoSegmentInfos
-			);
+			this.httpServer.registerMediaManifest(localMediaManifest, localVideoManifest, localAudioManifest);
 
 			childProcess.spawn(process.env.MPC_PATH, [`${this.httpServer.url.href}media.m3u8`], { detached: true });
-		}, 500);
+		}
 	}
 
 	async exit(code = 0) {
-		for (let i = 0; i < this.components.length; i++) await this.components[i].exit && this.components[i].exit();
+		for (let i = 0; i < this.components.length; i++) if (this.components[i].exit) await this.components[i].exit();
 
 		process.exit(code);
 	}
