@@ -1,15 +1,11 @@
-import timersPromises from "node:timers/promises";
-
 import { JSDOM } from "jsdom";
-import async from "async";
 import httpStatus from "http-status-codes";
 import TTLCache from "@isaacs/ttlcache";
 
 import hash from "./utils/hash.js";
 
 const CHECK_BASE_URL_TIMEOUT_IN_MILLISECONDS = 3000;
-const SEGMENT_DOWNLOADING_COOLDOWN_IN_MILLISECONDS = 500;
-const SEGMENT_BUFFERS_CACHE_TTL_IN_MILLISECONDS = 60 * 60 * 1000;
+const SEGMENT_BUFFERS_CACHE_TTL_IN_MILLISECONDS = 15 * 60 * 1000;
 
 // async function downloadAllMediaSegments(filePath, manifestUrl, manifest) {
 // 	const segmentBuffers = [];
@@ -41,7 +37,6 @@ export default class LordFilmMediaProvider {
 		this.baseUrl = new URL(process.env.DOMAIN);
 
 		this.segmentBuffersCache = new TTLCache({ ttl: SEGMENT_BUFFERS_CACHE_TTL_IN_MILLISECONDS });
-		this.segmentBufferRequestsQueue = async.queue(async action => action());
 	}
 
 	async run() {
@@ -132,26 +127,8 @@ export default class LordFilmMediaProvider {
 		let segmentBuffer = this.segmentBuffersCache.get(segmentHash);
 		if (segmentBuffer) return segmentBuffer;
 
-		segmentBuffer = await new Promise((resolve, reject) => {
-			this.segmentBufferRequestsQueue.push(async () => {
-				try {
-					// console.log(Math.max(0, SEGMENT_DOWNLOADING_COOLDOWN_IN_MILLISECONDS - (Date.now().valueOf() - (this.lastSegmentResponseTime || 0))));
-
-					await timersPromises.setTimeout(Math.max(0, SEGMENT_DOWNLOADING_COOLDOWN_IN_MILLISECONDS - (Date.now().valueOf() - (this.lastSegmentResponseTime || 0))));
-
-					// console.log(new Date().toISOString(), segmentHash, Date.now().valueOf() - (this.lastSegmentResponseTime || 0));
-
-					const segmentResponse = await this.application.requestsManager.request(segmentUrl);
-					const segmentBuffer = Buffer.from(await segmentResponse.arrayBuffer());
-
-					this.lastSegmentResponseTime = Date.now().valueOf();
-
-					return resolve(segmentBuffer);
-				} catch (error) {
-					return reject(error);
-				}
-			});
-		});
+		const segmentResponse = await this.application.requestsManager.request(segmentUrl);
+		segmentBuffer = Buffer.from(await segmentResponse.arrayBuffer());
 
 		this.segmentBuffersCache.set(segmentHash, segmentBuffer);
 

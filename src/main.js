@@ -122,7 +122,7 @@ class Application {
 		// console.log(`[config.outputDirectory]: ${this.config.outputDirectory}`);
 
 		// const query = "Мартынко";
-		const query = "горько";
+		const query = "дылда";
 
 		console.log(`Searching for media "${query}"`);
 
@@ -143,39 +143,47 @@ class Application {
 			// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "mediaManifest.txt"), mediaManifestStr);
 			const mediaManifest = parseManifestStr(mediaManifestStr);
 			// const mediaManifest = parseManifestStr(fs.readFileSync(path.join(USER_DATA_DIRECTORY, "mediaManifest.txt")).toString());
-			const localMediaManifest = new LocalMediaManifest(mediaManifest, mediaManifestUrl);
+			const localMediaManifest = new LocalMediaManifest(mediaManifest, mediaManifestUrl, mediaInfo);
 			localMediaManifest.compile();
 
-			const videoManifestUrl = mediaManifest.playlists[0].uri;
-			const videoManifestResponse = await this.requestsManager.request(videoManifestUrl);
-			const videoManifestStr = await videoManifestResponse.text();
-			// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "videoManifest.txt"), videoManifestStr);
-			const videoManifest = parseManifestStr(videoManifestStr);
-			// const videoManifest = parseManifestStr(fs.readFileSync(path.join(USER_DATA_DIRECTORY, "videoManifest.txt")).toString());
-			const localVideoManifest = new LocalChannelManifest(videoManifest, "video", videoManifestUrl);
-			localVideoManifest.compile();
-			// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "localVideoManifest.txt"), localVideoManifest.compile());
+			for (const videoManifestItem of localMediaManifest.videoManifestItems) {
+				const videoManifestUrl = videoManifestItem.url;
+				const videoManifestResponse = await this.requestsManager.request(videoManifestUrl);
+				const videoManifestStr = await videoManifestResponse.text();
+				// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "videoManifest.txt"), videoManifestStr);
+				const videoManifest = parseManifestStr(videoManifestStr);
+				// const videoManifest = parseManifestStr(fs.readFileSync(path.join(USER_DATA_DIRECTORY, "videoManifest.txt")).toString());
+				const localVideoManifest = new LocalChannelManifest(videoManifestItem, videoManifest);
+				localVideoManifest.compile();
+				// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "localVideoManifest.txt"), localVideoManifest.compile());
 
-			// const videoFilePath = path.join(USER_DATA_DIRECTORY, "video.mp4");
-			// await downloadAllMediaSegments(videoFilePath, videoManifestUrl, videoManifest);
+				videoManifestItem.localManifest = localVideoManifest;
 
-			const audioManifestUrl = mediaManifest.mediaGroups.AUDIO["audio0"].default.uri;
-			const audioManifestResponse = await this.requestsManager.request(audioManifestUrl);
-			const audioManifestStr = await audioManifestResponse.text();
-			// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "audioManifest.txt"), audioManifestStr);
-			const audioManifest = parseManifestStr(audioManifestStr);
-			// const audioManifest = parseManifestStr(fs.readFileSync(path.join(USER_DATA_DIRECTORY, "audioManifest.txt")).toString());
-			const localAudioManifest = new LocalChannelManifest(audioManifest, "audio", audioManifestUrl);
-			localAudioManifest.compile();
-			// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "localAudioManifest.txt"), localAudioManifest.compile());
+				// const videoFilePath = path.join(USER_DATA_DIRECTORY, "video.mp4");
+				// await downloadAllMediaSegments(videoFilePath, videoManifestUrl, videoManifest);
+			}
 
-			// const audioFilePath = path.join(USER_DATA_DIRECTORY, "audio.mp4");
-			// await downloadAllMediaSegments(audioFilePath, audioManifestUrl, audioManifest);
+			for (const audioManifestItem of localMediaManifest.audioManifestItems) {
+				const audioManifestUrl = audioManifestItem.url;
+				const audioManifestResponse = await this.requestsManager.request(audioManifestUrl);
+				const audioManifestStr = await audioManifestResponse.text();
+				// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "audioManifest.txt"), audioManifestStr);
+				const audioManifest = parseManifestStr(audioManifestStr);
+				// const audioManifest = parseManifestStr(fs.readFileSync(path.join(USER_DATA_DIRECTORY, "audioManifest.txt")).toString());
+				const localAudioManifest = new LocalChannelManifest(audioManifestItem, audioManifest);
+				localAudioManifest.compile();
+				// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "localAudioManifest.txt"), localAudioManifest.compile());
+
+				audioManifestItem.localManifest = localAudioManifest;
+
+				// const audioFilePath = path.join(USER_DATA_DIRECTORY, "audio.mp4");
+				// await downloadAllMediaSegments(audioFilePath, audioManifestUrl, audioManifest);
+			}
 
 			// const mediaFilePath = path.join(USER_DATA_DIRECTORY, "out.mp4");
 			// await joinAudioAndVideo(videoFilePath, audioFilePath, mediaFilePath);
 
-			this.httpServer.registerMediaManifest(localMediaManifest, localVideoManifest, localAudioManifest);
+			this.httpServer.registerMediaManifest(localMediaManifest);
 
 			childProcess.spawn(process.env.MPC_PATH, [`${this.httpServer.url.href}media.m3u8`], { detached: true });
 		}

@@ -1,7 +1,4 @@
-import path from "node:path";
-
 import express from "express";
-import fs from "fs-extra";
 import httpStatus from "http-status-codes";
 
 const PORT = parseInt(process.env.HTTP_SERVER_PORT) || 5070;
@@ -23,55 +20,54 @@ export default class HttpServer {
 				return next();
 			})
 			.get("/media.m3u8", (req, res) => {
-				if (this.manifestRegistered) {
+				if (this.mediaManifest) {
 					return res
 						.contentType("application/vnd.apple.mpegurl")
 						.status(httpStatus.OK)
-						.send(this.mediaManifestBuffer);
-					// .send(fs.readFileSync(path.join(this.application.userDataDirectory, "localMediaManifest.txt")));
+						.send(this.mediaManifest.m3u8Text);
 				}
 
 				return res.sendStatus(httpStatus.NOT_FOUND);
 			})
-			.get("/audio.m3u8", (req, res) => {
-				if (this.manifestRegistered) {
-					return res
-						.contentType("application/vnd.apple.mpegurl")
-						.status(httpStatus.OK)
-						.send(this.channelManifests.audio.manifestBuffer);
-					// .send(fs.readFileSync(path.join(this.application.userDataDirectory, "localAudioManifest.txt")));
-				}
-
-				return res.sendStatus(httpStatus.NOT_FOUND);
-			})
-			.get("/video.m3u8", (req, res) => {
-				if (this.manifestRegistered) {
-					return res
-						.contentType("application/vnd.apple.mpegurl")
-						.status(httpStatus.OK)
-						.send(this.channelManifests.video.manifestBuffer);
-					// .send(fs.readFileSync(path.join(this.application.userDataDirectory, "localVideoManifest.txt")));
-				}
-
-				return res.sendStatus(httpStatus.NOT_FOUND);
-			})
-			.get("/segments/{:channel}/{:segmentNumber}.ts", async (req, res) => {
-				if (this.manifestRegistered) {
+			.get("/{:channel}-{:streamIndex}.m3u8", (req, res) => {
+				if (this.mediaManifest) {
 					const channel = req.params.channel;
-					const segmentNumber = Number(req.params.segmentNumber);
-					const channelManifest = this.channelManifests[channel];
-					if (channelManifest &&
-						Number.isFinite(segmentNumber) &&
-						segmentNumber >= 1 &&
-						segmentNumber < channelManifest.manifest.segmentInfos.length) {
-						const segmentInfo = channelManifest.manifest.segmentInfos[segmentNumber - 1];
-						const segmentBuffer = await this.application.mediaProvider.getSegmentBuffer(segmentInfo.url);
-						// const segmentBuffer = fs.readFileSync(path.join(this.application.userDataDirectory, "segments", channel, `${req.params.segmentNumber}.ts`));
+					if (channel === "audio" ||
+						channel === "video") {
+						const streamIndex = Number(req.params.streamIndex) - 1;
+						const manifestItems = channel === "audio" ? this.mediaManifest.audioManifestItems : this.mediaManifest.videoManifestItems;
+						const manifestItem = manifestItems[streamIndex];
+						if (manifestItem) {
+							return res
+								.contentType("application/vnd.apple.mpegurl")
+								.status(httpStatus.OK)
+								.send(manifestItem.localManifest.m3u8Text);
+						}
+					}
+				}
 
-						return res
-							.contentType(`${channel}/mp2t`)
-							.status(httpStatus.OK)
-							.send(segmentBuffer);
+				return res.sendStatus(httpStatus.NOT_FOUND);
+			})
+			.get("/segments/{:channel}-{:streamIndex}/{:segmentNumber}.ts", async (req, res) => {
+				if (this.mediaManifest) {
+					const channel = req.params.channel;
+					if (channel === "audio" ||
+						channel === "video") {
+						const streamIndex = Number(req.params.streamIndex) - 1;
+						const manifestItems = channel === "audio" ? this.mediaManifest.audioManifestItems : this.mediaManifest.videoManifestItems;
+						const manifestItem = manifestItems[streamIndex];
+						if (manifestItem) {
+							const segmentNumber = Number(req.params.segmentNumber) - 1;
+							const segmentInfo = manifestItem.localManifest.segmentInfos[segmentNumber];
+							if (segmentInfo) {
+								const segmentBuffer = await this.application.mediaProvider.getSegmentBuffer(segmentInfo.url);
+
+								return res
+									.contentType(`${channel}/mp2t`)
+									.status(httpStatus.OK)
+									.send(segmentBuffer);
+							}
+						}
 					}
 				}
 
@@ -87,21 +83,8 @@ export default class HttpServer {
 		});
 	}
 
-	registerMediaManifest(localMediaManifest, localVideoManifest, localAudioManifest) {
+	registerMediaManifest(localMediaManifest) {
 		this.mediaManifest = localMediaManifest;
-		this.mediaManifestBuffer = Buffer.from(this.mediaManifest.m3u8Text);
-		this.channelManifests = {
-			video: {
-				manifest: localVideoManifest,
-				manifestBuffer: Buffer.from(localVideoManifest.m3u8Text)
-			},
-			audio: {
-				manifest: localAudioManifest,
-				manifestBuffer: Buffer.from(localAudioManifest.m3u8Text)
-			}
-		};
-
-		this.manifestRegistered = true;
 
 		this.application.mediaProvider.clearSegmentBuffersCache();
 
@@ -110,9 +93,8 @@ export default class HttpServer {
 
 	unregisterMediaManifest() {
 		this.mediaManifest = undefined;
-		this.mediaManifestBuffer = undefined;
-		this.channelManifests = undefined;
-		this.manifestRegistered = false;
+
+		this.application.mediaProvider.clearSegmentBuffersCache();
 
 		console.log("media manifest unregistered");
 	}
