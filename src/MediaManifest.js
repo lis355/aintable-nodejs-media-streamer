@@ -29,7 +29,7 @@ export default class MediaManifest extends Manifest {
 		super(application);
 
 		this.mediaInfo = mediaInfo;
-		this.url = this.mediaInfo.source.hls;
+		this.url = this.mediaInfo.info.url;
 	}
 
 	async getManifest() {
@@ -103,7 +103,7 @@ class LocalMediaManifest extends LocalManifest {
 			const [audioName, audioInfo] = audioMediaGroup;
 
 			const name = formatIndex(audioMediaGroupIndex + 1);
-			const caption = `${this.manifest.mediaInfo.source.audio.names[audioMediaGroupIndex]} (${audioInfo.language})`;
+			const caption = `${this.manifest.mediaInfo.info.audio[audioMediaGroupIndex]} (${audioInfo.language})`;
 
 			lines.push(`#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="${caption}",DEFAULT=${audioInfo.default ? "YES" : "NO"},AUTOSELECT=${audioInfo.default ? "YES" : "NO"},URI="audio-${name}.m3u8"`);
 

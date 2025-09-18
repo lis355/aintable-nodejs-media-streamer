@@ -51,15 +51,24 @@ export default class LordFilmMediaProvider {
 
 		const searchResponseHtml = await searchResponse.text();
 
-		let document = (new JSDOM(searchResponseHtml)).window.document;
+		const document = (new JSDOM(searchResponseHtml)).window.document;
 
 		const result = [];
 
 		const searchItemElements = document.querySelectorAll(".th-item");
 		for (const searchItemElement of searchItemElements) {
+			const url = searchItemElement.querySelector("a[href]").getAttribute("href");
+
+			let type;
+			if (url.includes("filmy")) type = "film";
+			else if (url.includes("serialy")) type = "series";
+			else if (url.includes("mult")) type = "cartoon";
+			else throw new Error("Unknown media type");
+
 			const item = {
 				title: searchItemElement.querySelector(".th-title").textContent,
-				url: searchItemElement.querySelector("a[href]").getAttribute("href")
+				type,
+				url
 			};
 
 			result.push(item);
@@ -85,9 +94,50 @@ export default class LordFilmMediaProvider {
 		document = (new JSDOM(mediaInfoPageResponseHtml)).window.document;
 
 		const scriptElement = document.querySelector("script[data-name=mk]");
-		const scriptStr = scriptElement.textContent;
+		let scriptStr = scriptElement.textContent;
 
-		const mediaInfo = eval("(" + scriptStr.substring(scriptStr.indexOf("({") + 1, scriptStr.lastIndexOf("})") + 1) + ")");
+		const openBraceIndex = scriptStr.indexOf("makePlayer({") + "makePlayer({".length - 1;
+		if (openBraceIndex <= 0) throw new Error("Invalid script string");
+
+		let braceAmount = 1;
+		for (let closeBraceIndex = openBraceIndex + 1; closeBraceIndex < scriptStr.length; closeBraceIndex++) {
+			const c = scriptStr[closeBraceIndex];
+			if (c === "{") braceAmount++;
+			else if (c === "}") braceAmount--;
+
+			if (braceAmount === 0) {
+				scriptStr = scriptStr.substring(openBraceIndex, closeBraceIndex + 1);
+				break;
+			}
+		}
+
+		const playerInfo = eval("(" + scriptStr + ")");
+
+		const mediaInfo = {
+			title: mediaItem.title,
+			type: mediaItem.type
+		};
+
+		function getInfo(rawInfo) {
+			return {
+				audio: rawInfo.audio.names,
+				captions: rawInfo.cc,
+				url: rawInfo.hls
+			};
+		}
+
+		switch (mediaItem.type) {
+			case "film":
+			case "cartoon":
+				mediaInfo.info = getInfo(playerInfo.source);
+				break;
+
+			case "series":
+				mediaInfo.seasons = playerInfo.playlist.seasons.map(season => ({ episodes: season.episodes.map(episode => ({ title: episode.title, info: getInfo(episode) })) }));
+				break;
+
+			default: throw new Error(`Unknown media type ${mediaItem.type}`);
+		}
 
 		return mediaInfo;
 	}

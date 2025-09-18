@@ -19,7 +19,7 @@ const isDevelopment = process.env.VSCODE_INJECTION &&
 const CWD = path.resolve(process.cwd());
 
 dotenv({
-	path: CWD // import.meta.dirname
+	path: CWD
 });
 
 const USER_DATA_DIRECTORY = path.join(CWD, process.env.USER_DATA || "userData");
@@ -109,7 +109,9 @@ class Application {
 		// console.log(`[config]: ${this.configPath}`);
 		// console.log(`[config.outputDirectory]: ${this.config.outputDirectory}`);
 
-		const query = "никто 2"; // "Мартынко"
+		// const query = "Мартынко";
+		const query = "Никто 2";
+		// const query = "Первозданная Америка";
 
 		console.log(`Searching for media "${query}"`);
 
@@ -117,11 +119,15 @@ class Application {
 		if (searchResult.length === 0) {
 			console.log(`No media found for "${query}"`);
 		} else {
-			console.log(`Found ${searchResult.length} media items for "${query}": ${searchResult.map(mediaItem => `"${mediaItem.title}"`).join(", ")}`);
+			console.log(`Found ${searchResult.length} media items for "${query}"`);
 
 			const mediaItem = _.first(searchResult);
 
-			const mediaInfo = await this.mediaProvider.getMediaInfo(mediaItem);
+			let mediaInfo = await this.mediaProvider.getMediaInfo(mediaItem);
+			if (mediaItem.type === "series") mediaInfo = mediaInfo.seasons[0].episodes[0];
+
+			console.log(mediaInfo.title);
+
 			const mediaManifest = new MediaManifest(this, mediaInfo);
 
 			this.httpServer.registerMediaManifest(mediaManifest);
