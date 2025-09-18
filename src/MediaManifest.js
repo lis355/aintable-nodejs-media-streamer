@@ -121,7 +121,7 @@ class LocalMediaManifest extends LocalManifest {
 			const name = formatIndex(streamIndex + 1);
 
 			lines.push(
-				`#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=${stream.attributes.BANDWIDTH},CODECS="${stream.attributes.CODECS}",RESOLUTION=${stream.attributes.RESOLUTION.width}x${stream.attributes.RESOLUTION.height},AUDIO="audio",FRAME-RATE=${stream.attributes["FRAME-RATE"]},VIDEO-RANGE=${stream.attributes["VIDEO-RANGE"]}`,
+				`#EXT-X-STREAM-INF:PROGRAM-ID=1,NAME="${stream.attributes.RESOLUTION.width}x${stream.attributes.RESOLUTION.height} ${stream.attributes["FRAME-RATE"]} ${stream.attributes["VIDEO-RANGE"]} ${stream.attributes.BANDWIDTH}bps",BANDWIDTH=${stream.attributes.BANDWIDTH},CODECS="${stream.attributes.CODECS}",RESOLUTION=${stream.attributes.RESOLUTION.width}x${stream.attributes.RESOLUTION.height},AUDIO="audio",FRAME-RATE=${stream.attributes["FRAME-RATE"]},VIDEO-RANGE=${stream.attributes["VIDEO-RANGE"]}`,
 				`video-${name}.m3u8`
 			);
 

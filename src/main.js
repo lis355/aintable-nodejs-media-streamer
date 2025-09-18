@@ -109,7 +109,7 @@ class Application {
 		// console.log(`[config]: ${this.configPath}`);
 		// console.log(`[config.outputDirectory]: ${this.config.outputDirectory}`);
 
-		const query = "никто 2"; // "Мартынко";
+		const query = "никто 2"; // "Мартынко"
 
 		console.log(`Searching for media "${query}"`);
 
@@ -126,7 +126,7 @@ class Application {
 
 			this.httpServer.registerMediaManifest(mediaManifest);
 
-			childProcess.spawn(process.env.MPC_PATH, [`${this.httpServer.url.href}media.m3u8`], { detached: true });
+			childProcess.spawn(process.env.PLAYER_EXE_PATH, [`${this.httpServer.url.href}media.m3u8`], { detached: true });
 		}
 	}
 
