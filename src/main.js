@@ -40,6 +40,8 @@ class Application {
 		this.components = [];
 
 		this.printLogo();
+
+		if (isDevelopment) console.warn("[isDevelopment]");
 	}
 
 	printLogo() {
@@ -61,6 +63,8 @@ class Application {
 	async initialize() {
 		this.createUserDataDirectory();
 		// this.createConfig();
+
+		console.log(`[userDataDirectory]: ${this.userDataDirectory}`);
 
 		// const { default: FFMpegManager } = await import("./components/FFMpegManager.js");
 
@@ -104,8 +108,6 @@ class Application {
 	async run() {
 		for (let i = 0; i < this.components.length; i++) if (this.components[i].run) await this.components[i].run();
 
-		if (isDevelopment) console.warn("[isDevelopment]");
-		console.log(`[userDataDirectory]: ${this.userDataDirectory}`);
 		// console.log(`[config]: ${this.configPath}`);
 		// console.log(`[config.outputDirectory]: ${this.config.outputDirectory}`);
 
@@ -113,20 +115,20 @@ class Application {
 		const query = "Никто 2";
 		// const query = "Первозданная Америка";
 
-		console.log(`Searching for media "${query}"`);
+		console.log(`Searching media by query "${query}"`);
 
 		const searchResult = await this.mediaProvider.search(query);
 		if (searchResult.length === 0) {
-			console.log(`No media found for "${query}"`);
+			console.log("No media found");
 		} else {
-			console.log(`Found ${searchResult.length} media items for "${query}"`);
+			console.log(`Found ${searchResult.length} media items `);
 
 			const mediaItem = _.first(searchResult);
 
 			let mediaInfo = await this.mediaProvider.getMediaInfo(mediaItem);
 			if (mediaItem.type === "series") mediaInfo = mediaInfo.seasons[0].episodes[0];
 
-			console.log(mediaInfo.title);
+			console.log(`${mediaInfo.title} (${mediaInfo.type})`);
 
 			const mediaManifest = new MediaManifest(this, mediaInfo);
 

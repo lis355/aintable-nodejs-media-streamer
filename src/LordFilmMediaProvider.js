@@ -4,35 +4,41 @@ import TTLCache from "@isaacs/ttlcache";
 
 import hash from "./utils/hash.js";
 
-const CHECK_BASE_URL_TIMEOUT_IN_MILLISECONDS = 3000;
+const MAXIMUM_SEARCH_RESULTS = 10;
 const SEGMENT_BUFFERS_CACHE_TTL_IN_MILLISECONDS = 15 * 60 * 1000;
 
 export default class LordFilmMediaProvider {
 	async initialize() {
-		this.baseUrl = new URL(process.env.DOMAIN);
-
 		this.segmentBuffersCache = new TTLCache({ ttl: SEGMENT_BUFFERS_CACHE_TTL_IN_MILLISECONDS });
 	}
 
 	async run() {
-		await this.checkBaseUrl();
+		await this.tryToGetCurrentMirror();
 	}
 
-	async checkBaseUrl() {
-		console.log(`[LordFilmMediaProvider]: checking access to ${this.baseUrl.href}...`);
+	async tryToGetCurrentMirror() {
+		this.baseUrl = undefined;
 
 		try {
-			const response = await this.application.requestsManager.request(this.baseUrl.href, {
-				signal: AbortSignal.timeout(CHECK_BASE_URL_TIMEOUT_IN_MILLISECONDS)
+			const response = await this.application.requestsManager.request("https://t.me/s/lordfilm");
+			const responseHtml = await response.text();
+
+			const document = (new JSDOM(responseHtml)).window.document;
+
+			let url = new URL(document.querySelector("a.url_button[href]").getAttribute("href"));
+			url.pathname = "";
+
+			const testResponse = await this.application.requestsManager.request(url.href, {
+				redirect: "manual"
 			});
 
-			if (response.status !== httpStatus.OK) throw new Error(`Bad status ${response.status}`);
+			if (testResponse.status === httpStatus.MOVED_PERMANENTLY ||
+				testResponse.status === httpStatus.MOVED_TEMPORARILY) url = new URL(testResponse.headers.get("location"));
 
-			console.log(`[LordFilmMediaProvider]: ${this.baseUrl.href} is accessible`);
-		} catch (error) {
-			console.log(`[LordFilmMediaProvider]: ${this.baseUrl.href} is not accessible, exiting (${[error.message, error.cause && error.cause.code, error.cause && error.cause.message].filter(Boolean).join(", ")})`);
+			this.baseUrl = new URL(url.href);
 
-			this.application.exit(1);
+			console.log(`[LordFilmMediaProvider]: got current mirror url ${this.baseUrl.href}`);
+		} catch (_) {
 		}
 	}
 
@@ -55,7 +61,9 @@ export default class LordFilmMediaProvider {
 
 		const result = [];
 
-		const searchItemElements = document.querySelectorAll(".th-item");
+		const searchItemElements = Array.from(document.querySelectorAll(".th-item"))
+			.slice(0, MAXIMUM_SEARCH_RESULTS);
+
 		for (const searchItemElement of searchItemElements) {
 			const url = searchItemElement.querySelector("a[href]").getAttribute("href");
 

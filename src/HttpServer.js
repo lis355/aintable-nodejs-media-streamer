@@ -89,7 +89,7 @@ export default class HttpServer {
 
 	async run() {
 		this.expressApplication.listen(PORT, () => {
-			console.log(`HTTP server is running on ${this.url.href}`);
+			console.log(`[HttpServer]: local HTTP server is running on ${this.url.href}`);
 		});
 	}
 
