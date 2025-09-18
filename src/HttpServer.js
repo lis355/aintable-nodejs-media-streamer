@@ -19,46 +19,56 @@ export default class HttpServer {
 
 				return next();
 			})
-			.get("/media.m3u8", (req, res) => {
+			.get("/media.m3u8", async (req, res) => {
 				if (this.mediaManifest) {
+					const manifest = await this.mediaManifest.getManifest();
+
 					return res
 						.contentType("application/vnd.apple.mpegurl")
 						.status(httpStatus.OK)
-						.send(this.mediaManifest.m3u8Text);
+						.send(manifest.localManifest.m3u8Text);
 				}
 
 				return res.sendStatus(httpStatus.NOT_FOUND);
 			})
-			.get("/{:channel}-{:streamIndex}.m3u8", (req, res) => {
+			.get("/{:channel}-{:channelIndex}.m3u8", async (req, res) => {
 				if (this.mediaManifest) {
 					const channel = req.params.channel;
 					if (channel === "audio" ||
 						channel === "video") {
-						const streamIndex = Number(req.params.streamIndex) - 1;
-						const manifestItems = channel === "audio" ? this.mediaManifest.audioManifestItems : this.mediaManifest.videoManifestItems;
-						const manifestItem = manifestItems[streamIndex];
-						if (manifestItem) {
+						const channelIndex = Number(req.params.channelIndex) - 1;
+
+						const manifest = await this.mediaManifest.getManifest();
+
+						const channelManifest = manifest.localManifest.channelManifests[channel][channelIndex];
+						if (channelManifest) {
+							const manifest = await channelManifest.getManifest();
+
 							return res
 								.contentType("application/vnd.apple.mpegurl")
 								.status(httpStatus.OK)
-								.send(manifestItem.localManifest.m3u8Text);
+								.send(manifest.localManifest.m3u8Text);
 						}
 					}
 				}
 
 				return res.sendStatus(httpStatus.NOT_FOUND);
 			})
-			.get("/segments/{:channel}-{:streamIndex}/{:segmentNumber}.ts", async (req, res) => {
+			.get("/segments/{:channel}-{:channelIndex}/{:segmentNumber}.ts", async (req, res) => {
 				if (this.mediaManifest) {
 					const channel = req.params.channel;
 					if (channel === "audio" ||
 						channel === "video") {
-						const streamIndex = Number(req.params.streamIndex) - 1;
-						const manifestItems = channel === "audio" ? this.mediaManifest.audioManifestItems : this.mediaManifest.videoManifestItems;
-						const manifestItem = manifestItems[streamIndex];
-						if (manifestItem) {
+						const channelIndex = Number(req.params.channelIndex) - 1;
+
+						const manifest = await this.mediaManifest.getManifest();
+
+						const channelManifest = manifest.localManifest.channelManifests[channel][channelIndex];
+						if (channelManifest) {
+							const manifest = await channelManifest.getManifest();
+
 							const segmentNumber = Number(req.params.segmentNumber) - 1;
-							const segmentInfo = manifestItem.localManifest.segmentInfos[segmentNumber];
+							const segmentInfo = manifest.localManifest.segmentInfos[segmentNumber];
 							if (segmentInfo) {
 								const segmentBuffer = await this.application.mediaProvider.getSegmentBuffer(segmentInfo.url);
 
@@ -83,8 +93,8 @@ export default class HttpServer {
 		});
 	}
 
-	registerMediaManifest(localMediaManifest) {
-		this.mediaManifest = localMediaManifest;
+	registerMediaManifest(mediaManifest) {
+		this.mediaManifest = mediaManifest;
 
 		this.application.mediaProvider.clearSegmentBuffersCache();
 
@@ -93,8 +103,6 @@ export default class HttpServer {
 
 	unregisterMediaManifest() {
 		this.mediaManifest = undefined;
-
-		this.application.mediaProvider.clearSegmentBuffersCache();
 
 		console.log("media manifest unregistered");
 	}

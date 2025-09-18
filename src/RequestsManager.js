@@ -10,24 +10,22 @@ const REQUEST_COOLDOWN_IN_MILLISECONDS = 500;
 const USER_AGENT = process.env.USER_AGENT;
 if (!USER_AGENT) console.warn("Empty USER_AGENT");
 
-const cookieJar = new CookieJar();
-const fetchCookie = makeFetchCookie(fetch, cookieJar);
-
-export default class RequestsManager {
-	async initialize() {
-		// TODO OPTIMIZE concrete queue for every domain
+class RequestsQueue {
+	constructor(requestsManager, domain) {
+		this.requestsManager = requestsManager;
+		this.domain = domain;
 		this.requestsQueue = async.queue(async action => action());
 	}
 
 	async request(url, options) {
 		return new Promise((resolve, reject) => {
 			this.requestsQueue.push(async () => {
-				// console.log(new Date().toISOString(), url);
+				// console.log(new Date().toISOString(), this.domain, this.requestsQueue.length(), url);
 
 				try {
-					await timersPromises.setTimeout(Math.max(0, REQUEST_COOLDOWN_IN_MILLISECONDS - (Date.now() - (this.lastSegmentResponseTime || 0))));
+					await timersPromises.setTimeout(Math.max(0, REQUEST_COOLDOWN_IN_MILLISECONDS - (Date.now() - (this.lastResponseTime || 0))));
 
-					const response = await fetchCookie(
+					const response = await this.requestsManager.fetchCookie(
 						url,
 						_.merge(
 							{},
@@ -40,7 +38,7 @@ export default class RequestsManager {
 						)
 					);
 
-					this.lastSegmentResponseTime = Date.now();
+					this.lastResponseTime = Date.now();
 
 					return resolve(response);
 				} catch (error) {
@@ -48,5 +46,25 @@ export default class RequestsManager {
 				}
 			});
 		});
+	}
+}
+
+export default class RequestsManager {
+	async initialize() {
+		this.cookieJar = new CookieJar();
+		this.fetchCookie = makeFetchCookie(fetch, this.cookieJar);
+	}
+
+	__getRequestsQueueForDomain(domain) {
+		if (!this.requestsQueuesForDomains) this.requestsQueuesForDomains = {};
+
+		let requestsQueue = this.requestsQueuesForDomains[domain];
+		if (!requestsQueue) requestsQueue = this.requestsQueuesForDomains[domain] = new RequestsQueue(this, domain);
+
+		return requestsQueue;
+	}
+
+	async request(url, options) {
+		return this.__getRequestsQueueForDomain(new URL(url).host).request(url, options);
 	}
 }

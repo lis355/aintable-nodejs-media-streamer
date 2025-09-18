@@ -7,31 +7,6 @@ import hash from "./utils/hash.js";
 const CHECK_BASE_URL_TIMEOUT_IN_MILLISECONDS = 3000;
 const SEGMENT_BUFFERS_CACHE_TTL_IN_MILLISECONDS = 15 * 60 * 1000;
 
-// async function downloadAllMediaSegments(filePath, manifestUrl, manifest) {
-// 	const segmentBuffers = [];
-
-// 	manifestUrl = new URL(manifestUrl);
-
-// 	for (let segmentIndex = 0; segmentIndex < manifest.segments.length; segmentIndex++) {
-// 		const segment = manifest.segments[segmentIndex];
-
-// 		const url = new URL(urlJoin(manifestUrl.origin, ...manifestUrl.pathname.split("/").slice(0, -1), segment.uri));
-
-// 		const segmentResponse = await request(url.href);
-// 		const segmentBuffer = Buffer.from(await segmentResponse.arrayBuffer());
-
-// 		// fs.writeFileSync(path.join(USER_DATA_DIRECTORY, "segments", "audio", `${(segmentIndex + 1).toString().padStart(5, "0")}.ts`), segmentBuffer);
-
-// 		segmentBuffers.push(segmentBuffer);
-
-// 		console.log(`Downloaded ${segmentIndex + 1}/${manifest.segments.length} segments`);
-
-// 		if (segmentIndex < manifest.segments.length - 1) await timersPromises.setTimeout(SEGMENT_DOWNLOADING_COOLDOWN_IN_MILLISECONDS);
-// 	}
-
-// 	fs.writeFileSync(filePath, Buffer.concat(segmentBuffers));
-// }
-
 export default class LordFilmMediaProvider {
 	async initialize() {
 		this.baseUrl = new URL(process.env.DOMAIN);
