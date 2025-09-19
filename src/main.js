@@ -3,6 +3,7 @@ import path from "node:path";
 
 import _ from "lodash";
 import { config as dotenv } from "dotenv-flow";
+import filenamify from "filenamify";
 import fs from "fs-extra";
 
 import HttpServer from "./HttpServer.js";
@@ -13,17 +14,13 @@ import RequestsManager from "./RequestsManager.js";
 
 import applicationInfo from "../package.json" with { type: "json" };
 
-const isDevelopment = process.env.VSCODE_INJECTION &&
-	process.env.VSCODE_INSPECTOR_OPTIONS;
+const isDevelopment = Boolean(process.env.VSCODE_INJECTION && process.env.VSCODE_INSPECTOR_OPTIONS);
 
 const CWD = path.resolve(process.cwd());
 
 dotenv({
 	path: CWD
 });
-
-const USER_DATA_DIRECTORY = path.join(CWD, process.env.USER_DATA || "userData");
-
 
 class Application {
 	constructor() {
@@ -66,8 +63,6 @@ class Application {
 
 		console.log(`[userDataDirectory]: ${this.userDataDirectory}`);
 
-		// const { default: FFMpegManager } = await import("./components/FFMpegManager.js");
-
 		this.addComponent(this.httpServer = new HttpServer());
 		this.addComponent(this.requestsManager = new RequestsManager());
 		this.addComponent(this.mediaProvider = new LordFilmMediaProvider());
@@ -77,11 +72,10 @@ class Application {
 	}
 
 	createUserDataDirectory() {
-		// this.userDataDirectory = this.isDevelopment
-		// 	? path.resolve(import.meta.dirname, "userData")
-		// 	: path.resolve(process.env.APPDATA, filenamify(this.info.name));
-
-		this.userDataDirectory = USER_DATA_DIRECTORY;
+		this.userDataDirectory = path.join(
+			this.isDevelopment ? CWD : path.resolve(process.env.APPDATA, filenamify(applicationInfo.name)),
+			"userData"
+		);
 
 		fs.ensureDirSync(this.userDataDirectory);
 	}
@@ -111,6 +105,16 @@ class Application {
 		// console.log(`[config]: ${this.configPath}`);
 		// console.log(`[config.outputDirectory]: ${this.config.outputDirectory}`);
 
+		await this.testSearch();
+	}
+
+	async exit(code = 0) {
+		for (let i = 0; i < this.components.length; i++) if (this.components[i].exit) await this.components[i].exit();
+
+		process.exit(code);
+	}
+
+	async testSearch() {
 		// const query = "Мартынко";
 		const query = "Никто 2";
 		// const query = "Первозданная Америка";
@@ -136,12 +140,6 @@ class Application {
 
 			childProcess.spawn(process.env.PLAYER_EXE_PATH, [`${this.httpServer.url.href}media.m3u8`], { detached: true });
 		}
-	}
-
-	async exit(code = 0) {
-		for (let i = 0; i < this.components.length; i++) if (this.components[i].exit) await this.components[i].exit();
-
-		process.exit(code);
 	}
 }
 

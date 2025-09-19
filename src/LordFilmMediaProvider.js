@@ -1,4 +1,5 @@
 import { JSDOM } from "jsdom";
+// import byteSize from "byte-size";
 import httpStatus from "http-status-codes";
 import TTLCache from "@isaacs/ttlcache";
 
@@ -86,6 +87,8 @@ export default class LordFilmMediaProvider {
 	}
 
 	async getMediaInfo(mediaItem) {
+		// console.log(`[LordFilmMediaProvider]: mediaItem url ${mediaItem.url}`);
+
 		const mediaPageResponse = await this.application.requestsManager.request(mediaItem.url);
 		const mediaPageResponseHtml = await mediaPageResponse.text();
 
@@ -154,7 +157,9 @@ export default class LordFilmMediaProvider {
 		this.segmentBuffersCache.clear();
 	}
 
-	async getSegmentBuffer(segmentUrl) {
+	async getSegmentBuffer(segmentInfo) {
+		const segmentUrl = segmentInfo.url;
+
 		const segmentHash = hash(segmentUrl);
 
 		let segmentBuffer = this.segmentBuffersCache.get(segmentHash);
@@ -162,6 +167,8 @@ export default class LordFilmMediaProvider {
 
 		const segmentResponse = await this.application.requestsManager.request(segmentUrl);
 		segmentBuffer = Buffer.from(await segmentResponse.arrayBuffer());
+
+		// console.log(`[LordFilmMediaProvider]: downloaded segment ${new URL(segmentUrl).pathname} ${byteSize(segmentBuffer.length, { precision: 2 })}`);
 
 		this.segmentBuffersCache.set(segmentHash, segmentBuffer);
 

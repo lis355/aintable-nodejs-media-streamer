@@ -70,7 +70,7 @@ export default class HttpServer {
 							const segmentNumber = Number(req.params.segmentNumber) - 1;
 							const segmentInfo = manifest.localManifest.segmentInfos[segmentNumber];
 							if (segmentInfo) {
-								const segmentBuffer = await this.application.mediaProvider.getSegmentBuffer(segmentInfo.url);
+								const segmentBuffer = await this.application.mediaProvider.getSegmentBuffer(segmentInfo);
 
 								return res
 									.contentType(`${channel}/mp2t`)

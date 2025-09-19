@@ -1,4 +1,7 @@
+// import path from "node:path";
+
 import _ from "lodash";
+// import fs from "fs-extra";
 import m3u8Parser from "m3u8-parser";
 import urlJoin from "url-join";
 
@@ -36,7 +39,10 @@ export default class MediaManifest extends Manifest {
 		if (!this.__manifest) {
 			const manifestResponse = await this.application.requestsManager.request(this.url);
 			const manifestStr = await manifestResponse.text();
+
 			this.__manifest = parseManifestStr(manifestStr);
+			this.__manifest.text = manifestStr;
+			// fs.outputFileSync(path.join(this.application.userDataDirectory, "MediaManifest.m3u8"), this.url + "\n\n" + this.__manifest.text);
 
 			this.__manifest.localManifest = this.localManifest = new LocalMediaManifest(this.application, this);
 			await this.localManifest.compile();
@@ -58,11 +64,14 @@ class ChannelManifest extends Manifest {
 
 	async getManifest() {
 		if (!this.__manifest) {
-			console.log("[channel]", this.channel, this.name, this.caption);
+			// console.log("[channel]", this.channel, this.name, this.caption);
 
 			const manifestResponse = await this.application.requestsManager.request(this.url);
 			const manifestStr = await manifestResponse.text();
+
 			this.__manifest = parseManifestStr(manifestStr);
+			this.__manifest.text = manifestStr;
+			// fs.outputFileSync(path.join(this.application.userDataDirectory, `ChannelManifest ${this.channel} ${this.name}.m3u8`), this.url + "\n\n" + this.__manifest.text);
 
 			this.__manifest.localManifest = this.localManifest = new LocalChannelManifest(this.application, this);
 			await this.localManifest.compile();
