@@ -5,7 +5,7 @@ import TTLCache from "@isaacs/ttlcache";
 
 import hash from "./utils/hash.js";
 
-const MAXIMUM_SEARCH_RESULTS = 10;
+const MAXIMUM_SEARCH_RESULTS = 30;
 const SEGMENT_BUFFERS_CACHE_TTL_IN_MILLISECONDS = 15 * 60 * 1000;
 
 export default class LordFilmMediaProvider {
@@ -72,6 +72,7 @@ export default class LordFilmMediaProvider {
 			if (url.includes("filmy")) type = "film";
 			else if (url.includes("serialy")) type = "series";
 			else if (url.includes("mult")) type = "cartoon";
+			else if (url.includes("anime")) type = "anime";
 			else throw new Error("Unknown media type");
 
 			const item = {
@@ -140,6 +141,7 @@ export default class LordFilmMediaProvider {
 		switch (mediaItem.type) {
 			case "film":
 			case "cartoon":
+			case "anime":
 				mediaInfo.info = getInfo(playerInfo.source);
 				break;
 

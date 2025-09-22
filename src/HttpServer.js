@@ -1,11 +1,11 @@
 import express from "express";
 import httpStatus from "http-status-codes";
 
-const PORT = parseInt(process.env.HTTP_SERVER_PORT) || 5070;
 
 export default class HttpServer {
 	async initialize() {
-		this.url = new URL(`http://localhost:${PORT}/`);
+		this.port = parseInt(process.env.HTTP_SERVER_PORT) || 5070;
+		this.url = new URL(`http://localhost:${this.port}/`);
 
 		this.expressApplication = express();
 		this.expressApplication.disable("x-powered-by");
@@ -88,7 +88,7 @@ export default class HttpServer {
 	}
 
 	async run() {
-		this.expressApplication.listen(PORT, () => {
+		this.expressApplication.listen(this.port, () => {
 			console.log(`[HttpServer]: local HTTP server is running on ${this.url.href}`);
 		});
 	}
@@ -98,12 +98,12 @@ export default class HttpServer {
 
 		this.application.mediaProvider.clearSegmentBuffersCache();
 
-		console.log(`media manifest registered on ${this.url.href}media.m3u8`);
+		console.log(`[HttpServer]: media manifest registered on ${this.url.href}media.m3u8`);
 	}
 
 	unregisterMediaManifest() {
 		this.mediaManifest = undefined;
 
-		console.log("media manifest unregistered");
+		console.log("[HttpServer]: media manifest unregistered");
 	}
 }

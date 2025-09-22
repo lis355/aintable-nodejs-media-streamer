@@ -128,13 +128,14 @@ class LocalMediaManifest extends LocalManifest {
 			const stream = videoStreamPlaylists[streamIndex];
 
 			const name = formatIndex(streamIndex + 1);
+			const caption = `${stream.attributes.RESOLUTION.width}x${stream.attributes.RESOLUTION.height} ${stream.attributes["FRAME-RATE"]} ${stream.attributes["VIDEO-RANGE"]} ${stream.attributes.BANDWIDTH}bps`;
 
 			lines.push(
-				`#EXT-X-STREAM-INF:PROGRAM-ID=1,NAME="${stream.attributes.RESOLUTION.width}x${stream.attributes.RESOLUTION.height} ${stream.attributes["FRAME-RATE"]} ${stream.attributes["VIDEO-RANGE"]} ${stream.attributes.BANDWIDTH}bps",BANDWIDTH=${stream.attributes.BANDWIDTH},CODECS="${stream.attributes.CODECS}",RESOLUTION=${stream.attributes.RESOLUTION.width}x${stream.attributes.RESOLUTION.height},AUDIO="audio",FRAME-RATE=${stream.attributes["FRAME-RATE"]},VIDEO-RANGE=${stream.attributes["VIDEO-RANGE"]}`,
+				`#EXT-X-STREAM-INF:PROGRAM-ID=1,NAME="${caption}",BANDWIDTH=${stream.attributes.BANDWIDTH},CODECS="${stream.attributes.CODECS}",RESOLUTION=${stream.attributes.RESOLUTION.width}x${stream.attributes.RESOLUTION.height},AUDIO="audio",FRAME-RATE=${stream.attributes["FRAME-RATE"]},VIDEO-RANGE=${stream.attributes["VIDEO-RANGE"]}`,
 				`video-${name}.m3u8`
 			);
 
-			this.videoChannelManifests.push(new ChannelManifest(this.application, name, name, "video", stream.uri));
+			this.videoChannelManifests.push(new ChannelManifest(this.application, name, caption, "video", stream.uri));
 		}
 
 		this.channelManifests = {

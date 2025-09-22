@@ -7,11 +7,11 @@ import makeFetchCookie from "fetch-cookie";
 
 const REQUEST_COOLDOWN_IN_MILLISECONDS = 500;
 
-const USER_AGENT = process.env.USER_AGENT;
-if (!USER_AGENT) console.warn("Empty USER_AGENT");
-
 class RequestsQueue {
 	constructor(requestsManager, domain) {
+		this.userAgent = process.env.USER_AGENT;
+		if (!this.userAgent) console.warn("Empty USER_AGENT");
+
 		this.requestsManager = requestsManager;
 		this.domain = domain;
 		this.requestsQueue = async.queue(async action => action());
@@ -32,7 +32,7 @@ class RequestsQueue {
 							options,
 							{
 								headers: {
-									"user-agent": USER_AGENT
+									"user-agent": this.userAgent
 								}
 							}
 						)

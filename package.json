@@ -4,12 +4,16 @@
 	"license": "MIT",
 	"type": "module",
 	"scripts": {
-		"start": "node main.js"
+		"start": "node main.js",
+		"installApp": "node ./scripts/install.js",
+		"uninstallApp": "node ./scripts/uninstall.js"
 	},
 	"dependencies": {
+		"@inquirer/prompts": "^7.8.6",
 		"@isaacs/ttlcache": "^1.4.1",
 		"async": "^3.2.6",
 		"byte-size": "^9.0.1",
+		"cli-progress": "^3.12.0",
 		"dotenv-flow": "^4.1.0",
 		"express": "^5.1.0",
 		"fetch-cookie": "^3.1.0",
@@ -17,6 +21,7 @@
 		"fs-extra": "^11.3.2",
 		"http-status-codes": "^2.3.0",
 		"jsdom": "^27.0.0",
+		"line-transform-stream": "^1.0.1",
 		"lodash": "^4.17.21",
 		"m3u8-parser": "^7.2.0",
 		"tough-cookie": "^6.0.0",
